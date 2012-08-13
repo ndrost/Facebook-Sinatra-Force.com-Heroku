@@ -40,7 +40,11 @@
           FB.ui(
             {
               method : 'feed',
-              link   : $(this).attr('data-url')
+              link   : $(this).attr('data-url'),
+              name : 'Heroku Cloudstock Charity Vote',
+              picture : document.location.protocol + '//' + document.location.host + '//images/logo-heroku.png',
+              caption : 'Vote for a charity donation',
+              description : 'Your vote counts too. Vote for a charity donation by Heroku at Cloudstock.'
             },
             function (response) {
               // If response is null the user canceled the dialog
@@ -51,11 +55,15 @@
           );
         });
 
-        $('#sendToFriends').click(function() {
+        $('.sendToFriends').click(function() {
           FB.ui(
             {
-              method : 'send',
-              link   : $(this).attr('data-url')
+              method : 'feed',
+              link   : $(this).attr('data-url'),
+              name : 'Heroku Cloudstock Charity Vote',
+              picture : document.location.protocol + '//' + document.location.host + '/' + $(this).attr('data-logo-url'),
+              caption : 'I voted for ' + $(this).attr('data-name'),
+              description : 'Your vote counts too. Vote for a charity donation by Heroku at Cloudstock.'
             },
             function (response) {
               // If response is null the user canceled the dialog
@@ -66,19 +74,32 @@
           );
         });
 
-        $('#sendRequest').click(function() {
-          FB.ui(
-            {
-              method  : 'apprequests',
-              message : $(this).attr('data-message')
-            },
-            function (response) {
-              // If response is null the user canceled the dialog
-              if (response != null) {
-                logResponse(response);
+        $('.vote-button.enabled').live('click', function(event){
+          event.preventDefault();
+          var charity = $(this).parents('.charity');
+          $.post('/vote', { charity_id: charity.attr('data-id') }, function(data) {
+            if (data.success) {
+              // Disable the vote buttons
+              $('.vote-button').each(function(){
+                $(this).removeClass('enabled');
+              });
+
+              // Enable the share button
+              $('.share-button', charity).addClass('enabled');
+
+              // Change the vote button to 'voted'
+              $('.vote-button', charity)
+                .html('<span class="voted-button">Voted</span>')
+                .removeClass('vote-button').addClass('voted-button');
+
+              // Update the vote counts
+              for (var key in data.vote_counts) {
+                $('.charity[data-id=' + key + '] .votes').html(data.vote_counts[key] + ' votes');
               }
+            } else {
+              alert("Oops! There was a problem registering your vote.\nPlease try again later!");
             }
-          );
+          });
         });
       });
     </script>
@@ -127,141 +148,77 @@
       }(document, 'script', 'facebook-jssdk'));
     </script>
 
-    <header class="clearfix">
-      <% if @user %>
-          <p id="picture" style="background-image: url(https://graph.facebook.com/<%= @user['id'] %>/picture?type=normal)"></p>
-          <div>
-            <h1>Welcome, <strong><%= @user['name'] %></strong></h1>
-            <p class="tagline">
-              This is your app
-              <a href="<%= @app['@app'] %>"><%= @app['name'] %></a>
-            </p>
-            <div id="share-app">
-              <p>Share your app:</p>
-              <ul>
-                <li>
-                  <a href="#" class="facebook-button" id="postToWall" data-url="<%= url %>">
-                    <span class="plus">Post to Wall</span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" class="facebook-button speech-bubble" id="sendToFriends" data-url="<%= url %>">
-                    <span class="speech-bubble">Send Message</span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" class="facebook-button apprequests" id="sendRequest" data-message="Test this awesome app">
-                    <span class="apprequests">Send Requests</span>
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-      <% else %>
-        <div>
-          <h1>Welcome</h1>
-            <a href='/auth/facebook' class="fb_button fb_button_medium">
-              <span class="fb_button_text">Log In</span>
-            </a>
-        </div>
-
-      <% end %>
-    </header>
-
-    <section id="get-started">
-      <p>Welcome to your Facebook app, running on <span>heroku</span>!</p>
-      <a href="https://devcenter.heroku.com/articles/facebook?utm_source=facebook&utm_medium=app&utm_campaign=fb_integration" target="_top" class="button">Learn How to Edit This App</a>
-    </section>
-
-
     <% if @user %>
-    <section id="samples" class="clearfix">
-          <h1>Examples of the Facebook Graph API</h1>
+      <header class="clearfix">
+        <p id="user" style="background-image: url(https://graph.facebook.com/<%= @user['id'] %>/picture)">
+          Welcome, <strong><%= @user['name'] %></strong>
+        </p>
+          <a href="#" class="facebook-button" id="postToWall" data-url="<%= url %>">
+            <span class="plus">Post to Wall</span>
+          </a>
+      </header>
 
-          <div class="list">
-            <h3>A few of your friends</h3>
-            <ul class="friends">
-              <% @friends.each do |friend| %>
-                <li>
-                  <a href="#" onclick="window.open('http://www.facebook.com/<%= friend['id']%>')">
-                    <img src="https://graph.facebook.com/<%= friend['id'] %>/picture?type=square" alt="<%= friend['name'] %>">
-                    <%= friend['name'] %>
+      <section id="charities" class="clearfix">
+<!--        <h3><a href="http://heroku.com"><img src="/images/logo-heroku.png" alt="heroku" border="0" /></a></h3> -->
+        <h1>Vote for a charity donation!</h1>
+        <ul>
+          <% @charities.each do |charity| %>
+            <li class="charity" data-id="<%= charity['Id'] %>" data-name="<%= charity['Name'] %>">
+              <a class="logo" href="<%= charity['URL__c'] %>" title="<%= charity['Id'] %>" style="background: url(<%= charity['Logo_URL__c'] %>) no-repeat center center">
+              </a>
+              <nav>
+                <p class="votes">
+                  <%= @vote_counts[charity['Id']].to_s %>
+                  <small><%= ((@vote_counts[charity['Id']] == 1) ? ' vote' : ' votes') %></small>
+                </p>
+                <% if @voted && @voted.charity_id == charity['Id'] %>
+                  <a href="#" class="facebook-button voted-button<%= ' enabled' unless @voted %>">
+                    <span class="voted-button">
+                      Voted
+                    </span>
                   </a>
-                </li>
-              <% end %>
-            </ul>
-          </div>
+                <% else %>
+                  <a href="#" class="facebook-button vote-button<%= ' enabled' unless @voted %>">
+                    <span class="vote-button">
+                      Vote
+                    </span>
+                  </a>
+                <% end %>
+                <a href="#" class="sendToFriends facebook-button speech-bubble share-button<%= ' enabled' if @voted && @voted.charity_id == charity['Id'] %>"
+                    data-url="<%= url %>" data-logo-url="<%= charity['Logo_URL__c'] %>" data-name="<%= charity['Name'] %>">
+                  <span class="speech-bubble">Share with Friends</span>
+                </a>
+              </nav>
+            </li>
+          <% end %>
+        </ul>
+      </section>
 
-          <div class="list inline">
-            <h3>Recent photos</h3>
-            <ul class="photos">
-              <% @photos.each_with_index do |photo, index| %>
-                <li style="background-image: url(<%= photo['picture'] %>)" class='<%= 'first-column' if (index%4).zero? %>'>
-                  <a href="#" onclick="window.open('http://www.facebook.com/<%= photo['id'] %>')">
-                    <%= photo['name'] %>
-                  </a>
-                </li>
-              <% end %>
-            </ul>
-          </div>
-
-          <div class="list">
-            <h3>Things you like</h3>
-            <ul class="things">
-              <% @likes.each do |like| %>
-                <li>
-                  <a href="#" onclick="window.open('http://www.facebook.com/<%= like['id'] %>')">
-                    <img src="https://graph.facebook.com/<%= like['id'] %>/picture?type=square" alt="<%= like['name'] %>">
-                    <%= like['name'] %>
-                  </a>
-                </li>
-              <% end %>
-            </ul>
-          </div>
-
-          <div class="list">
-            <h3>Friends using this app</h3>
-            <ul class="friends">
-              <% @friends_using_app.each do |friend_result| %>
-                <li>
-                  <a href="#" onclick="window.open('http://www.facebook.com/<%= friend_result['uid'] %>')">
-                    <img src="<%= friend_result['pic_square'] %>" alt="<%= friend_result['name'] %>">
-                    <%= friend_result['name'] %>
-                  </a>
-                </li>
-              <% end %>
-            </ul>
-          </div>
-        </section>
+      <section id="votes" class="clearfix">
+        <h3><%= [@vote_total.to_s, ((@vote_total == 1) ? 'vote' : 'votes')].join(' ') %>, from people including:</h3>
+        <ul class="photos clearfix">
+          <% @votes.each do |vote| %>
+            <li>
+              <a href="#" onclick="window.open('http://www.facebook.com/<%= vote.user_id %>')">
+                <img src="https://graph.facebook.com/<%= vote.user_id %>/picture" />
+              </a>
+            </li>
+          <% end %>
+          <% if @votes.count < 11 %>
+            <% (11 - @votes.count).times do %>
+              <li></li>
+            <% end %>
+          <% end %>
+        </ul>
+      </section>
+    <% else %>
+      <div>
+        <h1>Welcome to the Cloudstock 2012 Heroku Charity App</h1>
+          <a href='/auth/facebook' class="fb_button fb_button_medium">
+            <span class="fb_button_text">Log In</span>
+          </a>
+      </div>
     <% end %>
 
-
-    <section id="guides" class="clearfix">
-      <h1>Learn More About Heroku &amp; Facebook Apps</h1>
-      <ul>
-        <li>
-          <a href="https://www.heroku.com/?utm_source=facebook&utm_medium=app&utm_campaign=fb_integration" target="_top" class="icon heroku">Heroku</a>
-          <p>Learn more about <a href="https://www.heroku.com/?utm_source=facebook&utm_medium=app&utm_campaign=fb_integration" target="_top">Heroku</a>, or read developer docs in the Heroku <a href="https://devcenter.heroku.com/" target="_top">Dev Center</a>.</p>
-        </li>
-        <li>
-          <a href="https://developers.facebook.com/docs/guides/web/" target="_top" class="icon websites">Websites</a>
-          <p>
-            Drive growth and engagement on your site with
-            Facebook Login and Social Plugins.
-          </p>
-        </li>
-        <li>
-          <a href="https://developers.facebook.com/docs/guides/mobile/" target="_top" class="icon mobile-apps">Mobile Apps</a>
-          <p>
-            Integrate with our core experience by building apps
-            that operate within Facebook.
-          </p>
-        </li>
-        <li>
-          <a href="https://developers.facebook.com/docs/guides/canvas/" target="_top" class="icon apps-on-facebook">Apps on Facebook</a>
-          <p>Let users find and connect to their friends in mobile apps and games.</p>
-        </li>
-      </ul>
-    </section>
   </body>
 </html>
