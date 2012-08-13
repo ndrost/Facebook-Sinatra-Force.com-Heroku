@@ -201,6 +201,8 @@ end
 get "/resetdemo" do
 	puts "****Deleting all postgres data****"
 	Vote.destroy
+	puts "****Clearing Memcache****"
+	JSON.pretty_generate({ :success => dalli_client.delete(CHARITIES_KEY)}) + "\n"
 end
 
 get "/auth/facebook" do
@@ -237,7 +239,7 @@ def charities
     puts "***** Charities request served from memcache"
   else
     puts "***** Querying Force.com for charities"
-    query = "SELECT Id, Name, Logo_URL__c, URL__c from Charity__c ORDER BY Name"
+    query = "SELECT Id, Name, Logo_URL__c, URL__c from Charity__c where Visible__c = TRUE ORDER BY Name"
     @charities = force_token.get("#{force_token.params['instance_url']}/services/data/v24.0/query/?q=#{CGI::escape(query)}").parsed['records']
     dalli_client.set(CHARITIES_KEY, @charities)
   end
